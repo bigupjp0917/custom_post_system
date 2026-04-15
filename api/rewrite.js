@@ -38,9 +38,18 @@ const jsonHeaders = {
   'Content-Type': 'application/json',
 }
 
+/** Single-line token safe for Authorization-style headers (no CR/LF or stray whitespace). */
+function toHttpSafeApiKeyToken(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\r\n|\r|\n/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .trim()
+}
+
 function resolveGeminiApiKey() {
-  const rawKey = process.env.GEMINI_API_KEY || ''
-  const cleanKey = rawKey.replace(/[^a-zA-Z0-9_-]/g, '').trim()
+  const rawKey = String(process.env.GEMINI_API_KEY || '').trim()
+  const cleanKey = toHttpSafeApiKeyToken(rawKey)
   if (cleanKey) {
     return { apiKey: cleanKey, keyName: 'GEMINI_API_KEY' }
   }
@@ -50,8 +59,8 @@ function resolveGeminiApiKey() {
     ['GOOGLE_GENERATIVE_AI_API_KEY', process?.env?.GOOGLE_GENERATIVE_AI_API_KEY],
   ]
   for (const [keyName, rawValue] of fallbackSources) {
-    const raw = typeof rawValue === 'string' ? rawValue : ''
-    const apiKey = raw.replace(/[^a-zA-Z0-9_-]/g, '').trim()
+    const raw = String(rawValue ?? '').trim()
+    const apiKey = toHttpSafeApiKeyToken(raw)
     if (apiKey) {
       return { apiKey, keyName }
     }
@@ -220,8 +229,9 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Initialize only after strict validation above.
-    const genAI = new GoogleGenerativeAI(apiKey)
+    // Initialize only after strict validation above; never pass CR/LF or non-token chars to the client.
+    const httpSafeKey = toHttpSafeApiKeyToken(apiKey)
+    const genAI = new GoogleGenerativeAI(httpSafeKey)
     const model = genAI.getGenerativeModel({
       model: MODEL_NAME,
       systemInstruction: `${BASE_SYSTEM_PROMPT}
