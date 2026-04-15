@@ -122,6 +122,9 @@ function App() {
   const fortuneCopyButtonTimerRef = useRef(null)
   const gptLinkCopyButtonTimerRef = useRef(null)
   const gptOutputCopyButtonTimerRef = useRef(null)
+  const combinedCopyButtonTimerRef = useRef(null)
+  const importProfilesInputRef = useRef(null)
+  const [combinedCopyButtonDone, setCombinedCopyButtonDone] = useState(false)
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
   const xCount = countChars(xPost)
@@ -196,6 +199,9 @@ function App() {
       }
       if (gptOutputCopyButtonTimerRef.current) {
         clearTimeout(gptOutputCopyButtonTimerRef.current)
+      }
+      if (combinedCopyButtonTimerRef.current) {
+        clearTimeout(combinedCopyButtonTimerRef.current)
       }
     }
   }, [])
@@ -289,6 +295,66 @@ function App() {
     } catch (error) {
       console.error('Copy failed', error)
     }
+  }
+
+  const handleCombinedFortuneCopy = async () => {
+    const main = fortuneText?.trim() || ''
+    const gpt = gptPastedOutput?.trim() || ''
+    if (!main && !gpt) return
+    const chunks = []
+    if (main) {
+      chunks.push(`【本アプリで生成した鑑定文】\n\n${main}`)
+    }
+    if (gpt) {
+      chunks.push(`【ChatGPTの出力】\n\n${gpt}`)
+    }
+    const text = chunks.join('\n\n----------\n\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      if (combinedCopyButtonTimerRef.current) {
+        clearTimeout(combinedCopyButtonTimerRef.current)
+      }
+      showCopyToast()
+      setCombinedCopyButtonDone(true)
+      combinedCopyButtonTimerRef.current = setTimeout(() => {
+        setCombinedCopyButtonDone(false)
+        combinedCopyButtonTimerRef.current = null
+      }, 1400)
+    } catch (error) {
+      console.error('Copy failed', error)
+    }
+  }
+
+  const handleExportProfiles = () => {
+    const blob = new Blob([JSON.stringify(profiles, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `fortune-profiles-${new Date().toISOString().slice(0, 10)}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportProfiles = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const raw = await file.text()
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        window.alert('プロファイルの配列（1件以上）が必要です。')
+        return
+      }
+      const normalized = parsed.map((item, index) => normalizeProfile(item, index))
+      setProfiles(normalized)
+      setSelectedProfileId(normalized[0].id)
+    } catch (err) {
+      console.error(err)
+      window.alert('インポートに失敗しました。JSON形式を確認してください。')
+    }
+    event.target.value = ''
   }
 
   const handleSaveImage = async (imageUrl, filename) => {
@@ -512,6 +578,37 @@ function App() {
 
         {activeTab === 'settings' ? (
           <section className="mt-4 space-y-4">
+            <article className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
+              <h2 className="font-semibold text-[#f8d77c]">キャラクター設定の同期（スマホ／PC）</h2>
+              <p className="mt-2 text-xs leading-relaxed text-[#d9caa0]">
+                ブラウザの保存（localStorage）は<strong className="text-[#f4e2b1]">端末ごと</strong>
+                に別々です。PCで編集した内容をスマホでも同じにしたい場合は、PCで
+                「エクスポート」→ ファイルをスマホに送る → スマホで「インポート」を選んでください。
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportProfiles}
+                  className="rounded-lg border border-[#8d7a3f]/60 bg-[#121f4f] px-3 py-2 text-xs text-[#f8d77c]"
+                >
+                  プロファイルをエクスポート
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importProfilesInputRef.current?.click()}
+                  className="rounded-lg border border-[#8d7a3f]/60 bg-[#121f4f] px-3 py-2 text-xs text-[#f8d77c]"
+                >
+                  プロファイルをインポート
+                </button>
+                <input
+                  ref={importProfilesInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleImportProfiles}
+                />
+              </div>
+            </article>
             <article className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
               <h2 className="font-semibold text-[#f8d77c]">ChatGPT カスタムGPT</h2>
               <p className="mt-2 text-xs text-[#d9caa0]">
@@ -838,8 +935,9 @@ function App() {
                 <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5 shadow-[0_12px_50px_rgba(0,0,0,0.2)]">
                   <h3 className="font-semibold text-[#f8d77c]">ChatGPT（カスタムGPT）</h3>
                   <p className="mt-2 text-xs leading-relaxed text-[#d9caa0]">
-                    ChatGPT
-                    はセキュリティ上、このページ内へそのまま埋め込めないことがほとんどです。下のボタンで公式サイトを別タブで開き、GPTの返答をコピーして「GPTの返答」欄に貼り付けてください。貼り付けた内容もワンタップでコピーできます。
+                    このページ内には埋め込めないため、下のボタンで GPT を別タブで開いてください。
+                    <strong className="text-[#f4e2b1]"> GPT の返答は「鑑定結果」内の取り込み欄に貼り付け</strong>
+                    ます（コールドリーディングなどは GPT 側で行う想定です）。
                   </p>
                   {effectiveCustomGptUrl ? (
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -866,26 +964,6 @@ function App() {
                       を指定してください。
                     </p>
                   )}
-                  <label className="mt-4 block text-xs font-medium text-[#d9caa0]">
-                    GPTの返答（貼り付け・編集可）
-                  </label>
-                  <textarea
-                    value={gptPastedOutput}
-                    onChange={(event) => setGptPastedOutput(event.target.value)}
-                    rows={7}
-                    placeholder="ChatGPT の返答をここに貼り付けます。"
-                    className="mt-2 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0b1839] p-3 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleGptOutputCopy}
-                      disabled={!gptPastedOutput.trim()}
-                      className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45"
-                    >
-                      {gptOutputCopyButtonDone ? 'コピー完了' : 'コピー'}
-                    </button>
-                  </div>
                 </section>
                 <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -921,6 +999,38 @@ function App() {
                       </pre>
                     </div>
                   )}
+                  <div className="mt-6 rounded-xl border border-[#5a6a9a]/50 bg-[#0c1530] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold tracking-wide text-[#a8b8e8]">
+                        ChatGPTの出力（鑑定結果への取り込み）
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleGptOutputCopy}
+                          disabled={!gptPastedOutput.trim()}
+                          className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {gptOutputCopyButtonDone ? 'コピー完了' : 'GPTだけコピー'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCombinedFortuneCopy}
+                          disabled={!fortuneText.trim() && !gptPastedOutput.trim()}
+                          className="min-w-[4.5rem] rounded-lg border border-[#d9b862]/60 bg-[#1a2448] px-3 py-1 text-xs text-[#f8d77c] transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {combinedCopyButtonDone ? 'コピー完了' : '鑑定＋GPTをまとめてコピー'}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={gptPastedOutput}
+                      onChange={(event) => setGptPastedOutput(event.target.value)}
+                      rows={8}
+                      placeholder="ChatGPT の返答をここに貼り付け・編集します。"
+                      className="mt-3 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0b1839] p-3 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                    />
+                  </div>
                 </section>
               </>
             )}
