@@ -39,15 +39,19 @@ const jsonHeaders = {
 }
 
 function resolveGeminiApiKey() {
-  // Strip BOM, stray quotes, whitespace, and any non-key characters before calling Gemini.
-  const sources = [
-    ['GEMINI_API_KEY', process?.env?.GEMINI_API_KEY],
+  const rawKey = process.env.GEMINI_API_KEY || ''
+  const cleanKey = rawKey.replace(/[^a-zA-Z0-9_-]/g, '').trim()
+  if (cleanKey) {
+    return { apiKey: cleanKey, keyName: 'GEMINI_API_KEY' }
+  }
+
+  const fallbackSources = [
     ['GOOGLE_API_KEY', process?.env?.GOOGLE_API_KEY],
     ['GOOGLE_GENERATIVE_AI_API_KEY', process?.env?.GOOGLE_GENERATIVE_AI_API_KEY],
   ]
-  for (const [keyName, rawValue] of sources) {
-    const rawKey = typeof rawValue === 'string' ? rawValue : ''
-    const apiKey = rawKey ? rawKey.replace(/[^a-zA-Z0-9_-]/g, '').trim() : ''
+  for (const [keyName, rawValue] of fallbackSources) {
+    const raw = typeof rawValue === 'string' ? rawValue : ''
+    const apiKey = raw.replace(/[^a-zA-Z0-9_-]/g, '').trim()
     if (apiKey) {
       return { apiKey, keyName }
     }
