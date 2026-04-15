@@ -1,20 +1,53 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const MODEL_NAME = 'gemini-2.0-flash-preview-image-generation'
+// 2.0 preview 系は利用できないことが多い。画像出力は 2.5 Flash Image（Developer API）
+const MODEL_NAME = 'gemini-2.5-flash-image'
+
+/** @param {string | undefined} value */
+function toHttpSafeApiKeyToken(value) {
+  return String(value ?? '')
+    .trim()
+    .replace(/\r\n|\r|\n/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '')
+    .trim()
+}
 
 function resolveGeminiApiKey() {
-  const candidates = [
-    'GEMINI_API_KEY',
-    'GOOGLE_API_KEY',
-    'GOOGLE_GENERATIVE_AI_API_KEY',
+  const rawKey = String(process.env.GEMINI_API_KEY || '').trim()
+  const cleanKey = toHttpSafeApiKeyToken(rawKey)
+  if (cleanKey) {
+    return { apiKey: cleanKey, keyName: 'GEMINI_API_KEY' }
+  }
+  const fallbackSources = [
+    ['GOOGLE_API_KEY', process?.env?.GOOGLE_API_KEY],
+    ['GOOGLE_GENERATIVE_AI_API_KEY', process?.env?.GOOGLE_GENERATIVE_AI_API_KEY],
   ]
-  for (const key of candidates) {
-    const value = process?.env?.[key]
-    if (typeof value === 'string' && value.trim()) {
-      return { apiKey: value.trim(), keyName: key }
+  for (const [keyName, rawValue] of fallbackSources) {
+    const raw = String(rawValue ?? '').trim()
+    const apiKey = toHttpSafeApiKeyToken(raw)
+    if (apiKey) {
+      return { apiKey, keyName }
     }
   }
   return { apiKey: '', keyName: '' }
+}
+
+function extractImagePart(result) {
+  const candidates = result?.response?.candidates || []
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts || []
+    for (const part of parts) {
+      const mime = part?.inlineData?.mimeType
+      if (mime?.startsWith('image/') && part?.inlineData?.data) {
+        return part.inlineData
+      }
+    }
+  }
+  return null
+}
+
+function json(res, status, body) {
+  return res.status(status).setHeader('Content-Type', 'application/json').json(body)
 }
 
 export default async function handler(req, res) {
@@ -26,27 +59,33 @@ export default async function handler(req, res) {
 
   const { apiKey, keyName } = resolveGeminiApiKey()
   if (!apiKey) {
-    return res.status(500).json({
+    return json(res, 500, {
       error: 'GEMINI_API_KEY is not configured',
       debug: {
         stage: 'env_check',
         envVarName: 'GEMINI_API_KEY | GOOGLE_API_KEY | GOOGLE_GENERATIVE_AI_API_KEY',
         resolvedKey: keyName || 'none',
+        api: 'generate-image',
       },
     })
   }
 
   const { sourceText, profile, platform } = req.body ?? {}
   if (!sourceText || typeof sourceText !== 'string') {
-    return res.status(400).json({
+    return json(res, 400, {
       error: 'sourceText is required',
     })
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey)
+    const httpSafeKey = toHttpSafeApiKeyToken(apiKey)
+    const genAI = new GoogleGenerativeAI(httpSafeKey)
     const model = genAI.getGenerativeModel({
       model: MODEL_NAME,
+      generationConfig: {
+        // 画像出力モデルでは TEXT + IMAGE を明示（省略時は画像が返らないことがある）
+        responseModalities: ['TEXT', 'IMAGE'],
+      },
     })
 
     const ratioInstruction =
@@ -76,21 +115,35 @@ ${sourceText}
 - 画像比率は必ず ${ratioInstruction} で生成する`
 
     const result = await model.generateContent(prompt)
-    const parts = result?.response?.candidates?.[0]?.content?.parts || []
-    const imagePart = parts.find((part) => part.inlineData?.mimeType?.startsWith('image/'))
+    const inline = extractImagePart(result)
 
-    if (!imagePart?.inlineData?.data) {
-      return res.status(500).json({
+    if (!inline?.data) {
+      const finish = result?.response?.candidates?.[0]?.finishReason
+      return json(res, 500, {
         error: 'Image generation returned no image data',
+        debug: {
+          stage: 'empty_image',
+          model: MODEL_NAME,
+          finishReason: finish || 'unknown',
+          api: 'generate-image',
+          hint:
+            'Gemini 画像モデルは課金プランが必要な場合があります。Google AI Studio でプロジェクト・課金を確認してください。',
+        },
       })
     }
 
-    const imageDataUrl = `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`
-    return res.status(200).json({ imageDataUrl })
+    const imageDataUrl = `data:${inline.mimeType};base64,${inline.data}`
+    return json(res, 200, { imageDataUrl })
   } catch (error) {
     console.error('Gemini image generation error:', error)
-    return res.status(500).json({
+    return json(res, 500, {
       error: 'Failed to generate image',
+      debug: {
+        stage: 'exception',
+        model: MODEL_NAME,
+        api: 'generate-image',
+        message: error instanceof Error ? error.message : String(error),
+      },
     })
   }
 }

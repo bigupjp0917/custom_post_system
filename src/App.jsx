@@ -240,12 +240,20 @@ function App() {
           profile: selectedProfile,
         }),
       })
-      if (!response.ok) throw new Error('Image generation failed')
-      const data = await response.json()
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const detail = data?.debug
+          ? JSON.stringify(data.debug, null, 2)
+          : data?.error || response.statusText
+        throw new Error(
+          `${data?.error || 'Image generation failed'}\n${detail}`,
+        )
+      }
       setImage(data.imageDataUrl || '')
     } catch (error) {
       console.error(error)
-      setErrorMessage('画像生成に失敗しました。少し時間を置いて再試行してください。')
+      setErrorMessage('画像生成に失敗しました。詳細ログを確認してください。')
+      setDebugLog(error instanceof Error ? error.message : String(error))
     } finally {
       setLoading(false)
     }
@@ -579,7 +587,8 @@ function App() {
                 <div className="mt-3 rounded-lg border border-[#cf8f8f]/40 bg-[#3b1f2b]/40 p-3">
                   <p className="text-sm text-[#ffb7b7]">{errorMessage}</p>
                   <p className="mt-1 text-xs text-[#ffd6d6]">
-                    APIキーは `api/rewrite.js` で `process.env.GEMINI_API_KEY` として読み込んでいます。
+                    APIキーは Vercel の環境変数（例: GEMINI_API_KEY）から、`api/rewrite.js` および
+                    `api/generate-image.js` で読み込みます。
                   </p>
                   {debugLog && (
                     <pre className="mt-2 whitespace-pre-wrap text-xs text-[#ffe9e9]">
