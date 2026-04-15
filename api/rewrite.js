@@ -3,6 +3,47 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 // gemini-1.5-* は Developer API 側で利用不可・404 になることがあるため 2.5 を使用
 const MODEL_NAME = 'gemini-2.5-flash'
 
+/** @type {Record<string, string>} */
+const FORTUNE_METHOD_LABELS = {
+  tarot_major: 'タロット（大アルカナ）',
+  western_astrology: '占星術',
+  four_pillars: '四柱推命',
+  numerology: '数秘術',
+  animal_zodiac: '動物占い',
+}
+
+const VALID_FORTUNE_METHODS = new Set(Object.keys(FORTUNE_METHOD_LABELS))
+
+/**
+ * @param {string} methodKey
+ */
+function getFortuneMethodInstruction(methodKey) {
+  const blocks = {
+    tarot_major: `【今回指定された占術: タロット（大アルカナ）】
+- 鑑定の中核は大アルカナのみ。小アルカナや78枚フルデッキは扱わない。
+- 相談に沿い大アルカナを1〜3枚「引いた」設定にし、カード名（日本語の一般的呼称）・象徴・正位置/逆位置のニュアンスを本文に織り込む。
+- 【】見出しに【タロットからのメッセージ】または同等の章を必ず含める。
+- 他占術の専門用語で本文を埋めない。物語として一貫させる。`,
+    western_astrology: `【今回指定された占術: 占星術】
+- 十二星座・惑星・アスペクト・ハウス等の概念で読み解く。精密な天文計算や出生データの捏造はせず、「視えたシンボル」「象徴として」など柔らかく表現する。
+- 【】見出しに【星が語るメッセージ】または【ホロスコープからの導き】など占星術に即した章を必ず含める。
+- 他占術の専門用語で本文を埋めない。`,
+    four_pillars: `【今回指定された占術: 四柱推命】
+- 天干地支・五行・十神・通変星などの語彙で運気の傾向を説明する。相談にない出生時刻の断定はせず、相談から読み取れる範囲と「気質のパターン」としての示唆に留める。
+- 【】見出しに【四柱推命から見える流れ】または同等の章を必ず含める。
+- 宿命の絶対視は避け、過ごし方のヒントとして書く。他占術で本文を埋めない。`,
+    numerology: `【今回指定された占術: 数秘術】
+- ライフパス・誕生日数・名前の数など数秘の枠組でメッセージを構成。生年月日が相談にない場合は、テーマに響く「数のエッセンス」を象徴的に用い、1〜9の意味を鑑定に織り込む。
+- 【】見出しに【数秘が示すメッセージ】または同等の章を必ず含める。
+- 個人の正確な計算結果を嘘で断言しない。他占術で本文を埋めない。`,
+    animal_zodiac: `【今回指定された占術: 動物占い】
+- 動物タイプ（例: ライオン、ひつじ、こじか等）の一般的な性格傾向・相性の語りで読む。相談からタイプを推察し、強み・課題・関係性の読みを書く。
+- 【】見出しに【動物タイプからのメッセージ】または同等の章を必ず含める。
+- 特定サービスの商標・公式分類の丸写しはしない。他占術で本文を埋めない。`,
+  }
+  return blocks[methodKey] || blocks.tarot_major
+}
+
 const BASE_SYSTEM_PROMPT = `あなたは神秘的で知的な占い師。読者の魂に寄り添うような、丁寧かつ深みのある言葉遣い（〜ですね、〜なのです、といったトーン）でリライトしてください。
 星座、運勢、スピリチュアルなエッセンスを自然に混ぜ込んでください。`
 
@@ -202,7 +243,15 @@ export default async function handler(req, res) {
     })
   }
 
-  const { sourceText, mode = 'sns', profile, productRank = 'free' } = req.body ?? {}
+  const { sourceText, mode = 'sns', profile, productRank = 'free', fortuneMethod: rawFortuneMethod } =
+    req.body ?? {}
+
+  const fortuneMethod =
+    mode === 'fortune' &&
+    typeof rawFortuneMethod === 'string' &&
+    VALID_FORTUNE_METHODS.has(rawFortuneMethod)
+      ? rawFortuneMethod
+      : 'tarot_major'
   if (!sourceText || typeof sourceText !== 'string') {
     return res.status(400).json({
       error: 'sourceText is required',
@@ -329,6 +378,7 @@ ${templateInstruction}`
 
 ${mode === 'fortune' ? fortuneRankInstruction[productRank] || fortuneRankInstruction.free : ''}
 ${mode === 'fortune' ? upsellInstruction[productRank] || upsellInstruction.free : ''}
+${mode === 'fortune' ? `\n【ユーザーが選択した占術】${FORTUNE_METHOD_LABELS[fortuneMethod] || FORTUNE_METHOD_LABELS.tarot_major}\n${getFortuneMethodInstruction(fortuneMethod)}` : ''}
 
 ${mode === 'fortune' ? '相談内容' : '元ネタ'}:
 ${sourceText}`

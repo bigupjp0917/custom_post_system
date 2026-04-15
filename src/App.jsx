@@ -13,6 +13,13 @@ function App() {
     take: { min: 1350, max: 1700, label: '1350〜1700文字' },
     matsu: { min: 2000, max: 2600, label: '2000〜2600文字（目安）' },
   }
+  const FORTUNE_METHOD_OPTIONS = [
+    { key: 'tarot_major', label: 'タロット（大アルカナ）' },
+    { key: 'western_astrology', label: '占星術' },
+    { key: 'four_pillars', label: '四柱推命' },
+    { key: 'numerology', label: '数秘術' },
+    { key: 'animal_zodiac', label: '動物占い' },
+  ]
   const normalizeProfile = (profile, index = 0) => ({
     id: profile?.id || crypto.randomUUID(),
     appraiserName: profile?.appraiserName || profile?.name || `占い師 ${index + 1}`,
@@ -71,6 +78,17 @@ function App() {
   const [isProfilePickerOpen, setIsProfilePickerOpen] = useState(false)
   const [inputText, setInputText] = useState('')
   const [productRank, setProductRank] = useState('free')
+  const [fortuneMethod, setFortuneMethod] = useState(() => {
+    try {
+      const saved = localStorage.getItem('fortuneMethod')
+      if (saved && FORTUNE_METHOD_OPTIONS.some((m) => m.key === saved)) {
+        return saved
+      }
+    } catch {
+      /* ignore */
+    }
+    return 'tarot_major'
+  })
   const [xPost, setXPost] = useState('')
   const [threadsPost, setThreadsPost] = useState('')
   const [fortuneText, setFortuneText] = useState('')
@@ -93,6 +111,8 @@ function App() {
   const fortuneCount = countChars(fortuneText)
   const upsellCount = countChars(upsellText)
   const selectedFortuneRange = fortuneRanges[productRank] || fortuneRanges.free
+  const selectedFortuneMethodLabel =
+    FORTUNE_METHOD_OPTIONS.find((m) => m.key === fortuneMethod)?.label ?? 'タロット（大アルカナ）'
 
   useEffect(() => {
     const raw = localStorage.getItem('fortuneProfiles')
@@ -111,6 +131,14 @@ function App() {
   useEffect(() => {
     localStorage.setItem('fortuneProfiles', JSON.stringify(profiles))
   }, [profiles])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fortuneMethod', fortuneMethod)
+    } catch {
+      /* ignore */
+    }
+  }, [fortuneMethod])
 
   useEffect(() => {
     return () => {
@@ -284,6 +312,7 @@ function App() {
           sourceText: inputText,
           profile: selectedProfile,
           productRank,
+          ...(mode === 'fortune' ? { fortuneMethod } : {}),
         }),
       })
 
@@ -557,6 +586,23 @@ function App() {
                       </button>
                     ))}
                   </div>
+                  <p className="mb-2 mt-4 text-xs text-[#d9caa0]">占術（本格鑑定の出力に反映）</p>
+                  <div className="flex flex-wrap gap-2">
+                    {FORTUNE_METHOD_OPTIONS.map((m) => (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setFortuneMethod(m.key)}
+                        className={`rounded-lg px-3 py-2 text-xs md:text-sm ${
+                          fortuneMethod === m.key
+                            ? 'bg-[#c9a84a] text-[#1a1a1a]'
+                            : 'border border-[#8d7a3f]/50'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
               <p className="mt-3 text-sm text-[#d9caa0]">
@@ -691,8 +737,11 @@ function App() {
               </section>
             ) : (
               <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-[#f8d77c]">鑑定結果</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-semibold text-[#f8d77c]">鑑定結果</h3>
+                    <p className="mt-1 text-xs text-[#b8a66a]">占術: {selectedFortuneMethodLabel}</p>
+                  </div>
                   <button
                     type="button"
                     onClick={handleFortuneTextCopy}
