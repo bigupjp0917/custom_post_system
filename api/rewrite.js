@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const MODEL_NAME = 'gemini-1.5-flash'
+// gemini-1.5-* は Developer API 側で利用不可・404 になることがあるため 2.5 を使用
+const MODEL_NAME = 'gemini-2.5-flash'
 
 const BASE_SYSTEM_PROMPT = `あなたは神秘的で知的な占い師。読者の魂に寄り添うような、丁寧かつ深みのある言葉遣い（〜ですね、〜なのです、といったトーン）でリライトしてください。
 星座、運勢、スピリチュアルなエッセンスを自然に混ぜ込んでください。`
@@ -33,10 +34,6 @@ const SALES_STRUCTURE_PROMPT = `以下は「売れる鑑定導線」の骨組み
 重要:
 - 「ナナ」など固有名詞や、資料内の特定エピソードを流用しない
 - 必ずユーザー指定のキャラ背景・占術・口調に置換する`
-
-const jsonHeaders = {
-  'Content-Type': 'application/json',
-}
 
 /** Single-line token safe for Authorization-style headers (no CR/LF or stray whitespace). */
 function toHttpSafeApiKeyToken(value) {
@@ -261,19 +258,22 @@ ${sourceText}`
     const parsed = JSON.parse(jsonText)
 
     if (mode === 'fortune') {
-      return res.status(200).setHeader(jsonHeaders).json({
-        fortuneText: parsed.fortuneText ?? '',
-        upsellText: parsed.upsellText ?? '',
-      })
+      return res
+        .status(200)
+        .setHeader('Content-Type', 'application/json')
+        .json({
+          fortuneText: parsed.fortuneText ?? '',
+          upsellText: parsed.upsellText ?? '',
+        })
     }
 
-    return res.status(200).setHeader(jsonHeaders).json({
+    return res.status(200).setHeader('Content-Type', 'application/json').json({
       xPost: parsed.xPost ?? '',
       threadsPost: parsed.threadsPost ?? '',
     })
   } catch (error) {
     console.error('Gemini rewrite error:', error)
-    return res.status(500).setHeader(jsonHeaders).json({
+    return res.status(500).setHeader('Content-Type', 'application/json').json({
       error: 'Failed to rewrite text with Gemini',
       debug: {
         stage: 'generate_or_parse',
