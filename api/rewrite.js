@@ -39,17 +39,17 @@ const jsonHeaders = {
 }
 
 function resolveGeminiApiKey() {
-  // Read env lazily inside request lifecycle for serverless runtimes.
+  // Strip BOM, stray quotes, whitespace, and any non-key characters before calling Gemini.
   const sources = [
     ['GEMINI_API_KEY', process?.env?.GEMINI_API_KEY],
     ['GOOGLE_API_KEY', process?.env?.GOOGLE_API_KEY],
     ['GOOGLE_GENERATIVE_AI_API_KEY', process?.env?.GOOGLE_GENERATIVE_AI_API_KEY],
   ]
   for (const [keyName, rawValue] of sources) {
-    if (typeof rawValue !== 'string') continue
-    const trimmed = rawValue.trim()
-    if (trimmed) {
-      return { apiKey: trimmed, keyName }
+    const rawKey = typeof rawValue === 'string' ? rawValue : ''
+    const apiKey = rawKey ? rawKey.replace(/[^a-zA-Z0-9_-]/g, '').trim() : ''
+    if (apiKey) {
+      return { apiKey, keyName }
     }
   }
 
