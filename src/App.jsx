@@ -100,10 +100,22 @@ function App() {
   const [isRewriting, setIsRewriting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [debugLog, setDebugLog] = useState('')
-  const [fortuneCopyToast, setFortuneCopyToast] = useState(false)
+  const [copyToastVisible, setCopyToastVisible] = useState(false)
   const [fortuneCopyButtonDone, setFortuneCopyButtonDone] = useState(false)
-  const fortuneCopyToastTimerRef = useRef(null)
+  const [gptLinkCopyButtonDone, setGptLinkCopyButtonDone] = useState(false)
+  const [gptOutputCopyButtonDone, setGptOutputCopyButtonDone] = useState(false)
+  const [gptPastedOutput, setGptPastedOutput] = useState('')
+  const [customGptUrl, setCustomGptUrl] = useState(() => {
+    try {
+      return localStorage.getItem('customGptUrl') || ''
+    } catch {
+      return ''
+    }
+  })
+  const copyToastTimerRef = useRef(null)
   const fortuneCopyButtonTimerRef = useRef(null)
+  const gptLinkCopyButtonTimerRef = useRef(null)
+  const gptOutputCopyButtonTimerRef = useRef(null)
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
   const xCount = countChars(xPost)
@@ -141,12 +153,43 @@ function App() {
   }, [fortuneMethod])
 
   useEffect(() => {
+    try {
+      localStorage.setItem('customGptUrl', customGptUrl)
+    } catch {
+      /* ignore */
+    }
+  }, [customGptUrl])
+
+  const effectiveCustomGptUrl = (
+    import.meta.env.VITE_CUSTOM_GPT_URL ||
+    customGptUrl ||
+    ''
+  ).trim()
+
+  const showCopyToast = () => {
+    if (copyToastTimerRef.current) {
+      clearTimeout(copyToastTimerRef.current)
+    }
+    setCopyToastVisible(true)
+    copyToastTimerRef.current = setTimeout(() => {
+      setCopyToastVisible(false)
+      copyToastTimerRef.current = null
+    }, 2200)
+  }
+
+  useEffect(() => {
     return () => {
-      if (fortuneCopyToastTimerRef.current) {
-        clearTimeout(fortuneCopyToastTimerRef.current)
+      if (copyToastTimerRef.current) {
+        clearTimeout(copyToastTimerRef.current)
       }
       if (fortuneCopyButtonTimerRef.current) {
         clearTimeout(fortuneCopyButtonTimerRef.current)
+      }
+      if (gptLinkCopyButtonTimerRef.current) {
+        clearTimeout(gptLinkCopyButtonTimerRef.current)
+      }
+      if (gptOutputCopyButtonTimerRef.current) {
+        clearTimeout(gptOutputCopyButtonTimerRef.current)
       }
     }
   }, [])
@@ -190,21 +233,52 @@ function App() {
     if (!text?.trim()) return
     try {
       await navigator.clipboard.writeText(text)
-      if (fortuneCopyToastTimerRef.current) {
-        clearTimeout(fortuneCopyToastTimerRef.current)
-      }
       if (fortuneCopyButtonTimerRef.current) {
         clearTimeout(fortuneCopyButtonTimerRef.current)
       }
-      setFortuneCopyToast(true)
+      showCopyToast()
       setFortuneCopyButtonDone(true)
-      fortuneCopyToastTimerRef.current = setTimeout(() => {
-        setFortuneCopyToast(false)
-        fortuneCopyToastTimerRef.current = null
-      }, 2200)
       fortuneCopyButtonTimerRef.current = setTimeout(() => {
         setFortuneCopyButtonDone(false)
         fortuneCopyButtonTimerRef.current = null
+      }, 1400)
+    } catch (error) {
+      console.error('Copy failed', error)
+    }
+  }
+
+  const handleGptLinkCopy = async () => {
+    const url = effectiveCustomGptUrl
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      if (gptLinkCopyButtonTimerRef.current) {
+        clearTimeout(gptLinkCopyButtonTimerRef.current)
+      }
+      showCopyToast()
+      setGptLinkCopyButtonDone(true)
+      gptLinkCopyButtonTimerRef.current = setTimeout(() => {
+        setGptLinkCopyButtonDone(false)
+        gptLinkCopyButtonTimerRef.current = null
+      }, 1400)
+    } catch (error) {
+      console.error('Copy failed', error)
+    }
+  }
+
+  const handleGptOutputCopy = async () => {
+    const text = gptPastedOutput
+    if (!text?.trim()) return
+    try {
+      await navigator.clipboard.writeText(text)
+      if (gptOutputCopyButtonTimerRef.current) {
+        clearTimeout(gptOutputCopyButtonTimerRef.current)
+      }
+      showCopyToast()
+      setGptOutputCopyButtonDone(true)
+      gptOutputCopyButtonTimerRef.current = setTimeout(() => {
+        setGptOutputCopyButtonDone(false)
+        gptOutputCopyButtonTimerRef.current = null
       }, 1400)
     } catch (error) {
       console.error('Copy failed', error)
@@ -432,6 +506,24 @@ function App() {
 
         {activeTab === 'settings' ? (
           <section className="mt-4 space-y-4">
+            <article className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
+              <h2 className="font-semibold text-[#f8d77c]">ChatGPT カスタムGPT</h2>
+              <p className="mt-2 text-xs text-[#d9caa0]">
+                本格鑑定の「鑑定結果」の上に表示するボタン用のURLです（例:{' '}
+                <span className="text-[#cbb886]">https://chatgpt.com/g/g-xxxxxxxx</span>
+                ）。ビルド時に{' '}
+                <code className="rounded bg-[#0b1839] px-1 text-[#e8d89a]">VITE_CUSTOM_GPT_URL</code>{' '}
+                を設定している場合はそちらが優先されます。
+              </p>
+              <label className="mt-3 block text-xs text-[#d9caa0]">カスタムGPTのURL</label>
+              <input
+                type="url"
+                value={customGptUrl}
+                onChange={(event) => setCustomGptUrl(event.target.value)}
+                placeholder="https://chatgpt.com/g/..."
+                className="mt-1 w-full rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-3 py-2 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+              />
+            </article>
             <div className="flex justify-end">
               <button
                 type="button"
@@ -736,46 +828,100 @@ function App() {
                 </article>
               </section>
             ) : (
-              <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-[#f8d77c]">鑑定結果</h3>
-                    <p className="mt-1 text-xs text-[#b8a66a]">占術: {selectedFortuneMethodLabel}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleFortuneTextCopy}
-                    className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors"
-                  >
-                    {fortuneCopyButtonDone ? 'コピー完了' : 'コピー'}
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-[#cbb886]">
-                  実文字数: {fortuneCount} / 目標: {selectedFortuneRange.label} / 差分:{' '}
-                  {getDiffLabel(
-                    fortuneCount,
-                    selectedFortuneRange.min,
-                    selectedFortuneRange.max,
+              <>
+                <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5 shadow-[0_12px_50px_rgba(0,0,0,0.2)]">
+                  <h3 className="font-semibold text-[#f8d77c]">ChatGPT（カスタムGPT）</h3>
+                  <p className="mt-2 text-xs leading-relaxed text-[#d9caa0]">
+                    ChatGPT
+                    はセキュリティ上、このページ内へそのまま埋め込めないことがほとんどです。下のボタンで公式サイトを別タブで開き、GPTの返答をコピーして「GPTの返答」欄に貼り付けてください。貼り付けた内容もワンタップでコピーできます。
+                  </p>
+                  {effectiveCustomGptUrl ? (
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      <a
+                        href={effectiveCustomGptUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex rounded-lg bg-gradient-to-r from-[#d9b862] to-[#f8d77c] px-4 py-2 text-sm font-semibold text-[#141414] transition hover:brightness-105"
+                      >
+                        カスタムGPTを開く
+                      </a>
+                      <button
+                        type="button"
+                        onClick={handleGptLinkCopy}
+                        className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-2 text-xs transition-colors"
+                      >
+                        {gptLinkCopyButtonDone ? 'コピー完了' : 'リンクをコピー'}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-[#cbb886]">
+                      「設定」タブでカスタムGPTのURLを登録するか、ビルド時に{' '}
+                      <code className="rounded bg-[#0b1839] px-1">VITE_CUSTOM_GPT_URL</code>{' '}
+                      を指定してください。
+                    </p>
                   )}
-                </p>
-                <pre className="mt-3 min-h-72 whitespace-pre-wrap rounded-xl border border-[#8d7a3f]/30 bg-[#0b1839] p-4 text-sm">
-                  {fortuneText || '生成後に鑑定文が表示されます。'}
-                </pre>
-                {productRank !== 'matsu' && (
-                  <div className="mt-4 rounded-xl border border-[#b8974c]/45 bg-[#101b40] p-4">
-                    <p className="text-xs tracking-wide text-[#cdb173]">上位ランクへの提案</p>
-                    <p className="mt-1 text-xs text-[#cbb886]">実文字数: {upsellCount}</p>
-                    <pre className="mt-2 whitespace-pre-wrap text-sm text-[#f4e2b1]">
-                      {upsellText || '生成後にアップセル提案文が表示されます。'}
-                    </pre>
+                  <label className="mt-4 block text-xs font-medium text-[#d9caa0]">
+                    GPTの返答（貼り付け・編集可）
+                  </label>
+                  <textarea
+                    value={gptPastedOutput}
+                    onChange={(event) => setGptPastedOutput(event.target.value)}
+                    rows={7}
+                    placeholder="ChatGPT の返答をここに貼り付けます。"
+                    className="mt-2 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0b1839] p-3 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleGptOutputCopy}
+                      disabled={!gptPastedOutput.trim()}
+                      className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      {gptOutputCopyButtonDone ? 'コピー完了' : 'コピー'}
+                    </button>
                   </div>
-                )}
-              </section>
+                </section>
+                <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold text-[#f8d77c]">鑑定結果</h3>
+                      <p className="mt-1 text-xs text-[#b8a66a]">占術: {selectedFortuneMethodLabel}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleFortuneTextCopy}
+                      className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors"
+                    >
+                      {fortuneCopyButtonDone ? 'コピー完了' : 'コピー'}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-xs text-[#cbb886]">
+                    実文字数: {fortuneCount} / 目標: {selectedFortuneRange.label} / 差分:{' '}
+                    {getDiffLabel(
+                      fortuneCount,
+                      selectedFortuneRange.min,
+                      selectedFortuneRange.max,
+                    )}
+                  </p>
+                  <pre className="mt-3 min-h-72 whitespace-pre-wrap rounded-xl border border-[#8d7a3f]/30 bg-[#0b1839] p-4 text-sm">
+                    {fortuneText || '生成後に鑑定文が表示されます。'}
+                  </pre>
+                  {productRank !== 'matsu' && (
+                    <div className="mt-4 rounded-xl border border-[#b8974c]/45 bg-[#101b40] p-4">
+                      <p className="text-xs tracking-wide text-[#cdb173]">上位ランクへの提案</p>
+                      <p className="mt-1 text-xs text-[#cbb886]">実文字数: {upsellCount}</p>
+                      <pre className="mt-2 whitespace-pre-wrap text-sm text-[#f4e2b1]">
+                        {upsellText || '生成後にアップセル提案文が表示されます。'}
+                      </pre>
+                    </div>
+                  )}
+                </section>
+              </>
             )}
           </main>
         )}
       </div>
-      {fortuneCopyToast && (
+      {copyToastVisible && (
         <div
           className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-[#d9b862]/50 bg-[#1a1530]/95 px-4 py-2 text-xs font-medium text-[#f8d77c] shadow-lg shadow-black/40 backdrop-blur-sm"
           role="status"
