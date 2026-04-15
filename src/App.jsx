@@ -20,6 +20,8 @@ function App() {
     { key: 'numerology', label: '数秘術' },
     { key: 'animal_zodiac', label: '動物占い' },
   ]
+  /** 既定のカスタムGPT（占い鑑定文メソッドGPTs） */
+  const DEFAULT_CUSTOM_GPT_URL = 'https://chatgpt.com/g/g-oe1w8yED4'
   const normalizeProfile = (profile, index = 0) => ({
     id: profile?.id || crypto.randomUUID(),
     appraiserName: profile?.appraiserName || profile?.name || `占い師 ${index + 1}`,
@@ -107,9 +109,13 @@ function App() {
   const [gptPastedOutput, setGptPastedOutput] = useState('')
   const [customGptUrl, setCustomGptUrl] = useState(() => {
     try {
-      return localStorage.getItem('customGptUrl') || ''
+      const saved = localStorage.getItem('customGptUrl')
+      if (saved === null) {
+        return DEFAULT_CUSTOM_GPT_URL
+      }
+      return saved
     } catch {
-      return ''
+      return DEFAULT_CUSTOM_GPT_URL
     }
   })
   const copyToastTimerRef = useRef(null)
@@ -163,7 +169,7 @@ function App() {
   const effectiveCustomGptUrl = (
     import.meta.env.VITE_CUSTOM_GPT_URL ||
     customGptUrl ||
-    ''
+    DEFAULT_CUSTOM_GPT_URL
   ).trim()
 
   const showCopyToast = () => {
@@ -509,18 +515,18 @@ function App() {
             <article className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
               <h2 className="font-semibold text-[#f8d77c]">ChatGPT カスタムGPT</h2>
               <p className="mt-2 text-xs text-[#d9caa0]">
-                本格鑑定の「鑑定結果」の上に表示するボタン用のURLです（例:{' '}
-                <span className="text-[#cbb886]">https://chatgpt.com/g/g-xxxxxxxx</span>
+                本格鑑定の「鑑定結果」の上に表示するボタン用のURLです。初期値は「占い鑑定文メソッドGPTs」（{' '}
+                <span className="break-all text-[#cbb886]">{DEFAULT_CUSTOM_GPT_URL}</span>
                 ）。ビルド時に{' '}
                 <code className="rounded bg-[#0b1839] px-1 text-[#e8d89a]">VITE_CUSTOM_GPT_URL</code>{' '}
-                を設定している場合はそちらが優先されます。
+                を設定している場合はそちらが最優先されます。
               </p>
               <label className="mt-3 block text-xs text-[#d9caa0]">カスタムGPTのURL</label>
               <input
                 type="url"
                 value={customGptUrl}
                 onChange={(event) => setCustomGptUrl(event.target.value)}
-                placeholder="https://chatgpt.com/g/..."
+                placeholder={DEFAULT_CUSTOM_GPT_URL}
                 className="mt-1 w-full rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-3 py-2 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
               />
             </article>
