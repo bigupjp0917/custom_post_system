@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 function App() {
   const countChars = (text) => [...(text || '')].length
@@ -82,6 +82,10 @@ function App() {
   const [isRewriting, setIsRewriting] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [debugLog, setDebugLog] = useState('')
+  const [fortuneCopyToast, setFortuneCopyToast] = useState(false)
+  const [fortuneCopyButtonDone, setFortuneCopyButtonDone] = useState(false)
+  const fortuneCopyToastTimerRef = useRef(null)
+  const fortuneCopyButtonTimerRef = useRef(null)
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
   const xCount = countChars(xPost)
@@ -107,6 +111,17 @@ function App() {
   useEffect(() => {
     localStorage.setItem('fortuneProfiles', JSON.stringify(profiles))
   }, [profiles])
+
+  useEffect(() => {
+    return () => {
+      if (fortuneCopyToastTimerRef.current) {
+        clearTimeout(fortuneCopyToastTimerRef.current)
+      }
+      if (fortuneCopyButtonTimerRef.current) {
+        clearTimeout(fortuneCopyButtonTimerRef.current)
+      }
+    }
+  }, [])
 
   const updateProfile = (id, field, value) => {
     setProfiles((current) =>
@@ -137,6 +152,32 @@ function App() {
   const handleCopy = async (text) => {
     try {
       await navigator.clipboard.writeText(text)
+    } catch (error) {
+      console.error('Copy failed', error)
+    }
+  }
+
+  const handleFortuneTextCopy = async () => {
+    const text = fortuneText
+    if (!text?.trim()) return
+    try {
+      await navigator.clipboard.writeText(text)
+      if (fortuneCopyToastTimerRef.current) {
+        clearTimeout(fortuneCopyToastTimerRef.current)
+      }
+      if (fortuneCopyButtonTimerRef.current) {
+        clearTimeout(fortuneCopyButtonTimerRef.current)
+      }
+      setFortuneCopyToast(true)
+      setFortuneCopyButtonDone(true)
+      fortuneCopyToastTimerRef.current = setTimeout(() => {
+        setFortuneCopyToast(false)
+        fortuneCopyToastTimerRef.current = null
+      }, 2200)
+      fortuneCopyButtonTimerRef.current = setTimeout(() => {
+        setFortuneCopyButtonDone(false)
+        fortuneCopyButtonTimerRef.current = null
+      }, 1400)
     } catch (error) {
       console.error('Copy failed', error)
     }
@@ -645,10 +686,10 @@ function App() {
                   <h3 className="font-semibold text-[#f8d77c]">鑑定結果</h3>
                   <button
                     type="button"
-                    onClick={() => handleCopy(fortuneText)}
-                    className="rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs"
+                    onClick={handleFortuneTextCopy}
+                    className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors"
                   >
-                    コピー
+                    {fortuneCopyButtonDone ? 'コピー完了' : 'コピー'}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-[#cbb886]">
@@ -676,6 +717,14 @@ function App() {
           </main>
         )}
       </div>
+      {fortuneCopyToast && (
+        <div
+          className="pointer-events-none fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-[#d9b862]/50 bg-[#1a1530]/95 px-4 py-2 text-xs font-medium text-[#f8d77c] shadow-lg shadow-black/40 backdrop-blur-sm"
+          role="status"
+        >
+          コピーしました！
+        </div>
+      )}
     </div>
   )
 }
