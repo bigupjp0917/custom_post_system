@@ -14,6 +14,56 @@ const FORTUNE_METHOD_LABELS = {
 
 const VALID_FORTUNE_METHODS = new Set(Object.keys(FORTUNE_METHOD_LABELS))
 
+function normalizeBirthDate(input) {
+  if (!input || typeof input !== 'object') return null
+  const year = Number(input.year)
+  const month = Number(input.month)
+  const day = Number(input.day)
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null
+  if (year < 1900 || year > 2100) return null
+  if (month < 1 || month > 12) return null
+  if (day < 1 || day > 31) return null
+  return { year, month, day }
+}
+
+function getWesternSunSign(month, day) {
+  // Western tropical zodiac (Sun sign)
+  const md = month * 100 + day
+  if (md >= 321 && md <= 419) return '牡羊座'
+  if (md >= 420 && md <= 520) return '牡牛座'
+  if (md >= 521 && md <= 621) return '双子座'
+  if (md >= 622 && md <= 722) return '蟹座'
+  if (md >= 723 && md <= 822) return '獅子座'
+  if (md >= 823 && md <= 922) return '乙女座'
+  if (md >= 923 && md <= 1023) return '天秤座'
+  if (md >= 1024 && md <= 1122) return '蠍座'
+  if (md >= 1123 && md <= 1221) return '射手座'
+  // Capricorn crosses year boundary
+  if (md >= 1222 || md <= 119) return '山羊座'
+  if (md >= 120 && md <= 218) return '水瓶座'
+  return '魚座' // 219-320
+}
+
+function getLifePathNumber(year, month, day) {
+  const digits = String(year) + String(month) + String(day)
+  let sum = 0
+  for (const ch of digits) {
+    const n = Number(ch)
+    if (Number.isFinite(n)) sum += n
+  }
+  const reduce = (n) => {
+    if (n === 11 || n === 22 || n === 33) return n
+    while (n > 9) {
+      n = String(n)
+        .split('')
+        .reduce((acc, c) => acc + Number(c), 0)
+      if (n === 11 || n === 22 || n === 33) return n
+    }
+    return n
+  }
+  return reduce(sum)
+}
+
 /**
  * @param {string} methodKey
  */
@@ -238,8 +288,14 @@ export default async function handler(req, res) {
     })
   }
 
-  const { sourceText, mode = 'sns', profile, productRank = 'free', fortuneMethod: rawFortuneMethod } =
-    req.body ?? {}
+  const {
+    sourceText,
+    mode = 'sns',
+    profile,
+    productRank = 'free',
+    fortuneMethod: rawFortuneMethod,
+    birth,
+  } = req.body ?? {}
 
   const fortuneMethod =
     mode === 'fortune' &&
@@ -247,6 +303,35 @@ export default async function handler(req, res) {
     VALID_FORTUNE_METHODS.has(rawFortuneMethod)
       ? rawFortuneMethod
       : 'tarot_major'
+
+  const birthSelf = normalizeBirthDate(birth?.self)
+  const birthPartner = normalizeBirthDate(birth?.partner)
+  const birthHintBlock =
+    mode === 'fortune' && (birthSelf || birthPartner)
+      ? `\n【生年月日（任意入力）】\n${
+          birthSelf
+            ? `- 本人: ${birthSelf.year}年${birthSelf.month}月${birthSelf.day}日（太陽星座: ${getWesternSunSign(
+                birthSelf.month,
+                birthSelf.day,
+              )} / 数秘ライフパス: ${getLifePathNumber(
+                birthSelf.year,
+                birthSelf.month,
+                birthSelf.day,
+              )}）`
+            : '- 本人: 未入力'
+        }\n${
+          birthPartner
+            ? `- お相手: ${birthPartner.year}年${birthPartner.month}月${birthPartner.day}日（太陽星座: ${getWesternSunSign(
+                birthPartner.month,
+                birthPartner.day,
+              )} / 数秘ライフパス: ${getLifePathNumber(
+                birthPartner.year,
+                birthPartner.month,
+                birthPartner.day,
+              )}）`
+            : '- お相手: 未入力'
+        }\n- 生年月日は、入力されている場合のみ参照してよい。未入力の場合は推測や捏造をしない。`
+      : ''
   if (!sourceText || typeof sourceText !== 'string') {
     return res.status(400).json({
       error: 'sourceText is required',
@@ -374,6 +459,7 @@ ${templateInstruction}`
 ${mode === 'fortune' ? fortuneRankInstruction[productRank] || fortuneRankInstruction.free : ''}
 ${mode === 'fortune' ? upsellInstruction[productRank] || upsellInstruction.free : ''}
 ${mode === 'fortune' ? `\n【ユーザーが選択した占術】${FORTUNE_METHOD_LABELS[fortuneMethod] || FORTUNE_METHOD_LABELS.tarot_major}\n${getFortuneMethodInstruction(fortuneMethod)}` : ''}
+${birthHintBlock}
 
 ${mode === 'fortune' ? '相談内容' : '元ネタ'}:
 ${sourceText}`

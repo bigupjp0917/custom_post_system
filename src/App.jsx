@@ -20,6 +20,9 @@ function App() {
     { key: 'numerology', label: '数秘術' },
     { key: 'animal_zodiac', label: '動物占い' },
   ]
+  const BIRTH_YEARS = Array.from({ length: 101 }, (_, i) => String(1930 + i))
+  const BIRTH_MONTHS = Array.from({ length: 12 }, (_, i) => String(i + 1))
+  const BIRTH_DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1))
   /** 既定のカスタムGPT（占い鑑定文メソッドGPTs） */
   const DEFAULT_CUSTOM_GPT_URL = 'https://chatgpt.com/g/g-oe1w8yED4'
   const normalizeProfile = (profile, index = 0) => ({
@@ -91,6 +94,8 @@ function App() {
     }
     return 'tarot_major'
   })
+  const [birthSelf, setBirthSelf] = useState({ year: '', month: '', day: '' })
+  const [birthPartner, setBirthPartner] = useState({ year: '', month: '', day: '' })
   const [xPost, setXPost] = useState('')
   const [threadsPost, setThreadsPost] = useState('')
   const [fortuneText, setFortuneText] = useState('')
@@ -124,6 +129,7 @@ function App() {
   const gptOutputCopyButtonTimerRef = useRef(null)
   const combinedCopyButtonTimerRef = useRef(null)
   const importProfilesInputRef = useRef(null)
+  const importDraftInputRef = useRef(null)
   const [combinedCopyButtonDone, setCombinedCopyButtonDone] = useState(false)
 
   const selectedProfile = profiles.find((profile) => profile.id === selectedProfileId)
@@ -134,6 +140,88 @@ function App() {
   const selectedFortuneRange = fortuneRanges[productRank] || fortuneRanges.free
   const selectedFortuneMethodLabel =
     FORTUNE_METHOD_OPTIONS.find((m) => m.key === fortuneMethod)?.label ?? 'タロット（大アルカナ）'
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('fortuneDraft')
+      if (!raw) return
+      const draft = JSON.parse(raw)
+      if (typeof draft?.activeTab === 'string') setActiveTab(draft.activeTab)
+      if (typeof draft?.mode === 'string') setMode(draft.mode)
+      if (typeof draft?.inputText === 'string') setInputText(draft.inputText)
+      if (typeof draft?.productRank === 'string') setProductRank(draft.productRank)
+      if (
+        typeof draft?.fortuneMethod === 'string' &&
+        FORTUNE_METHOD_OPTIONS.some((m) => m.key === draft.fortuneMethod)
+      ) {
+        setFortuneMethod(draft.fortuneMethod)
+      }
+      if (draft?.birthSelf && typeof draft.birthSelf === 'object') {
+        setBirthSelf({
+          year: typeof draft.birthSelf.year === 'string' ? draft.birthSelf.year : '',
+          month: typeof draft.birthSelf.month === 'string' ? draft.birthSelf.month : '',
+          day: typeof draft.birthSelf.day === 'string' ? draft.birthSelf.day : '',
+        })
+      }
+      if (draft?.birthPartner && typeof draft.birthPartner === 'object') {
+        setBirthPartner({
+          year: typeof draft.birthPartner.year === 'string' ? draft.birthPartner.year : '',
+          month: typeof draft.birthPartner.month === 'string' ? draft.birthPartner.month : '',
+          day: typeof draft.birthPartner.day === 'string' ? draft.birthPartner.day : '',
+        })
+      }
+      if (typeof draft?.xPost === 'string') setXPost(draft.xPost)
+      if (typeof draft?.threadsPost === 'string') setThreadsPost(draft.threadsPost)
+      if (typeof draft?.fortuneText === 'string') setFortuneText(draft.fortuneText)
+      if (typeof draft?.upsellText === 'string') setUpsellText(draft.upsellText)
+      if (typeof draft?.gptPastedOutput === 'string') setGptPastedOutput(draft.gptPastedOutput)
+      if (typeof draft?.xImageUrl === 'string') setXImageUrl(draft.xImageUrl)
+      if (typeof draft?.threadsImageUrl === 'string') setThreadsImageUrl(draft.threadsImageUrl)
+    } catch (error) {
+      console.error('failed to load draft', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        'fortuneDraft',
+        JSON.stringify({
+          activeTab,
+          mode,
+          inputText,
+          productRank,
+          fortuneMethod,
+          birthSelf,
+          birthPartner,
+          xPost,
+          threadsPost,
+          fortuneText,
+          upsellText,
+          gptPastedOutput,
+          xImageUrl,
+          threadsImageUrl,
+        }),
+      )
+    } catch {
+      /* ignore */
+    }
+  }, [
+    activeTab,
+    mode,
+    inputText,
+    productRank,
+    fortuneMethod,
+    birthSelf,
+    birthPartner,
+    xPost,
+    threadsPost,
+    fortuneText,
+    upsellText,
+    gptPastedOutput,
+    xImageUrl,
+    threadsImageUrl,
+  ])
 
   useEffect(() => {
     const raw = localStorage.getItem('fortuneProfiles')
@@ -357,6 +445,65 @@ function App() {
     event.target.value = ''
   }
 
+  const handleExportDraft = () => {
+    const draft = {
+      activeTab,
+      mode,
+      inputText,
+      productRank,
+      fortuneMethod,
+      birthSelf,
+      birthPartner,
+      xPost,
+      threadsPost,
+      fortuneText,
+      upsellText,
+      gptPastedOutput,
+      xImageUrl,
+      threadsImageUrl,
+    }
+    const blob = new Blob([JSON.stringify(draft, null, 2)], {
+      type: 'application/json',
+    })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'latest.json'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportDraft = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    try {
+      const raw = await file.text()
+      const draft = JSON.parse(raw)
+      if (typeof draft?.activeTab === 'string') setActiveTab(draft.activeTab)
+      if (typeof draft?.mode === 'string') setMode(draft.mode)
+      if (typeof draft?.inputText === 'string') setInputText(draft.inputText)
+      if (typeof draft?.productRank === 'string') setProductRank(draft.productRank)
+      if (
+        typeof draft?.fortuneMethod === 'string' &&
+        FORTUNE_METHOD_OPTIONS.some((m) => m.key === draft.fortuneMethod)
+      ) {
+        setFortuneMethod(draft.fortuneMethod)
+      }
+      if (typeof draft?.xPost === 'string') setXPost(draft.xPost)
+      if (typeof draft?.threadsPost === 'string') setThreadsPost(draft.threadsPost)
+      if (typeof draft?.fortuneText === 'string') setFortuneText(draft.fortuneText)
+      if (typeof draft?.upsellText === 'string') setUpsellText(draft.upsellText)
+      if (typeof draft?.gptPastedOutput === 'string') setGptPastedOutput(draft.gptPastedOutput)
+      if (typeof draft?.xImageUrl === 'string') setXImageUrl(draft.xImageUrl)
+      if (typeof draft?.threadsImageUrl === 'string') setThreadsImageUrl(draft.threadsImageUrl)
+      window.alert('下書きを読み込みました。')
+    } catch (err) {
+      console.error(err)
+      window.alert('下書きの読み込みに失敗しました。JSON形式を確認してください。')
+    }
+    event.target.value = ''
+  }
+
   const handleSaveImage = async (imageUrl, filename) => {
     if (!imageUrl) return
     const isThreads = filename.includes('threads')
@@ -458,7 +605,15 @@ function App() {
           sourceText: inputText,
           profile: selectedProfile,
           productRank,
-          ...(mode === 'fortune' ? { fortuneMethod } : {}),
+          ...(mode === 'fortune'
+            ? {
+                fortuneMethod,
+                birth: {
+                  self: birthSelf,
+                  partner: birthPartner,
+                },
+              }
+            : {}),
         }),
       })
 
@@ -606,6 +761,33 @@ function App() {
                   accept="application/json,.json"
                   className="hidden"
                   onChange={handleImportProfiles}
+                />
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-[#cbb886]">
+                Finderで見える保存先に置きたい場合は、下の「下書きをエクスポート」でJSONを書き出して、
+                保存ダイアログで `AI` フォルダを選択してください。
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleExportDraft}
+                  className="rounded-lg border border-[#6f87cc]/60 bg-[#101e4a] px-3 py-2 text-xs text-[#d7e4ff]"
+                >
+                  下書きをエクスポート（AIフォルダ用）
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importDraftInputRef.current?.click()}
+                  className="rounded-lg border border-[#6f87cc]/60 bg-[#101e4a] px-3 py-2 text-xs text-[#d7e4ff]"
+                >
+                  下書きをインポート
+                </button>
+                <input
+                  ref={importDraftInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={handleImportDraft}
                 />
               </div>
             </article>
@@ -797,6 +979,101 @@ function App() {
                         {m.label}
                       </button>
                     ))}
+                  </div>
+                  <p className="mb-2 mt-4 text-xs text-[#d9caa0]">生年月日（任意 / 鑑定に反映）</p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-[#8d7a3f]/35 bg-[#0b1839] p-3">
+                      <p className="text-xs font-semibold text-[#f8d77c]">本人</p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <select
+                          value={birthSelf.year}
+                          onChange={(e) =>
+                            setBirthSelf((v) => ({ ...v, year: e.target.value, day: v.day }))
+                          }
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">年</option>
+                          {BIRTH_YEARS.map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={birthSelf.month}
+                          onChange={(e) =>
+                            setBirthSelf((v) => ({ ...v, month: e.target.value, day: v.day }))
+                          }
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">月</option>
+                          {BIRTH_MONTHS.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={birthSelf.day}
+                          onChange={(e) => setBirthSelf((v) => ({ ...v, day: e.target.value }))}
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">日</option>
+                          {BIRTH_DAYS.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-[#8d7a3f]/35 bg-[#0b1839] p-3">
+                      <p className="text-xs font-semibold text-[#f8d77c]">お相手</p>
+                      <div className="mt-2 grid grid-cols-3 gap-2">
+                        <select
+                          value={birthPartner.year}
+                          onChange={(e) =>
+                            setBirthPartner((v) => ({ ...v, year: e.target.value, day: v.day }))
+                          }
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">年</option>
+                          {BIRTH_YEARS.map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={birthPartner.month}
+                          onChange={(e) =>
+                            setBirthPartner((v) => ({ ...v, month: e.target.value, day: v.day }))
+                          }
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">月</option>
+                          {BIRTH_MONTHS.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                        <select
+                          value={birthPartner.day}
+                          onChange={(e) =>
+                            setBirthPartner((v) => ({ ...v, day: e.target.value }))
+                          }
+                          className="rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none focus:border-[#f8d77c]"
+                        >
+                          <option value="">日</option>
+                          {BIRTH_DAYS.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
