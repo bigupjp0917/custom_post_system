@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-// 2.0 preview 系は利用できないことが多い。画像出力は 2.5 Flash Image（Developer API）
-const MODEL_NAME = 'gemini-2.5-flash-image'
+// 画像生成モデル（要: 利用可能なモデル権限/課金プラン）
+const MODEL_NAME = 'gemini-3-flash-image'
 
 /** @param {string | undefined} value */
 function toHttpSafeApiKeyToken(value) {
@@ -93,12 +93,19 @@ export default async function handler(req, res) {
         ? '縦長4:5（例: 1080x1350）'
         : '横長16:9（例: 1280x720）'
 
-    const prompt = `SNS投稿に合わせた開運画像を1枚生成してください。
+    const prompt = `あなたはSNSで「目を止めさせる」スピリチュアル系ビジュアルのプロです。
+以下の投稿本文を読み取り、内容の核（テーマ・感情・キーワード）を象徴する「開運画像」を1枚生成してください。
+
 プラットフォーム: ${platform === 'threads' ? 'Threads' : 'X'}
 投稿本文:
 ${sourceText}
 
-キャラクター設定:
+ビジュアル設計（黄金比/バズ構図）:
+- 黄金比（1:1.618）の視線誘導: 主役モチーフを黄金点に配置し、背景の流れ線/光/円環で視線を導く
+- 高コントラスト（暗紺×金）で、サムネでも強い
+- 余白と密度のバランス: 情報を詰めすぎず、神秘性を残す
+
+キャラクター世界観（雰囲気の統一）:
 - 鑑定師名: ${profile?.appraiserName || '神秘の鑑定師'}
 - 肩書き: ${profile?.title || '波動リーディング専門家'}
 - キャラ設定: ${profile?.characterSetting || '神秘的で知的'}
@@ -108,10 +115,9 @@ ${sourceText}
     }
 
 画像要件:
-- ダークネイビーとゴールド基調
-- 投稿内キーワード（例: 満月、癒やし、金運、龍神）を象徴モチーフとして反映
-- 文字は入れない
-- スマホで映える高コントラストで神秘的なアート
+- 文字は入れない（ロゴ/文章/数字すべて禁止）
+- 投稿の核キーワードを、象徴モチーフに落とし込む（例: 満月=月輪、癒やし=光の粒子、金運=金の流れ、龍神=龍の気配）
+- フォトリアルよりアート寄り。神秘的で洗練された質感
 - 画像比率は必ず ${ratioInstruction} で生成する`
 
     const result = await model.generateContent(prompt)

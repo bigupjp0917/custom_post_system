@@ -815,7 +815,6 @@ function App() {
         setUpsellText('')
         setXImageUrl('')
         setThreadsImageUrl('')
-        await Promise.all([generateImage('x', nextX), generateImage('threads', nextThreads)])
       } else {
         setFortuneText(data.fortuneText || '')
         setUpsellText(data.upsellText || '')
@@ -1388,8 +1387,16 @@ function App() {
                     {xPost || '生成後に表示されます。'}
                   </pre>
                   <div className="mt-3 rounded-xl border border-[#8d7a3f]/30 bg-[#0b1839] p-3">
+                    <button
+                      type="button"
+                      onClick={() => generateImage('x', xPost)}
+                      disabled={!xPost.trim() || isGeneratingXImage}
+                      className="w-full rounded-lg bg-gradient-to-r from-[#d9b862] to-[#f8d77c] px-3 py-2 text-xs font-semibold text-[#141414] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isGeneratingXImage ? '星の光を画像に込めています...' : 'SNS用開運画像を生成'}
+                    </button>
                     {xImageUrl ? (
-                      <div className="overflow-hidden rounded-lg" style={{ aspectRatio: '16 / 9' }}>
+                      <div className="mt-3 overflow-hidden rounded-lg" style={{ aspectRatio: '16 / 9' }}>
                         <img
                           src={xImageUrl}
                           alt="X向け開運画像"
@@ -1397,7 +1404,7 @@ function App() {
                         />
                       </div>
                     ) : (
-                      <p className="text-xs text-[#d0be8f]">画像生成後に表示されます。</p>
+                      <p className="mt-3 text-xs text-[#d0be8f]">画像生成後に表示されます。</p>
                     )}
                     <button
                       type="button"
@@ -1430,8 +1437,16 @@ function App() {
                     {threadsPost || '生成後に表示されます。'}
                   </pre>
                   <div className="mt-3 rounded-xl border border-[#8d7a3f]/30 bg-[#0b1839] p-3">
+                    <button
+                      type="button"
+                      onClick={() => generateImage('threads', threadsPost)}
+                      disabled={!threadsPost.trim() || isGeneratingThreadsImage}
+                      className="w-full rounded-lg bg-gradient-to-r from-[#d9b862] to-[#f8d77c] px-3 py-2 text-xs font-semibold text-[#141414] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isGeneratingThreadsImage ? '星の光を画像に込めています...' : 'SNS用開運画像を生成'}
+                    </button>
                     {threadsImageUrl ? (
-                      <div className="overflow-hidden rounded-lg" style={{ aspectRatio: '4 / 5' }}>
+                      <div className="mt-3 overflow-hidden rounded-lg" style={{ aspectRatio: '4 / 5' }}>
                         <img
                           src={threadsImageUrl}
                           alt="Threads向け開運画像"
@@ -1439,7 +1454,7 @@ function App() {
                         />
                       </div>
                     ) : (
-                      <p className="text-xs text-[#d0be8f]">画像生成後に表示されます。</p>
+                      <p className="mt-3 text-xs text-[#d0be8f]">画像生成後に表示されます。</p>
                     )}
                     <button
                       type="button"
