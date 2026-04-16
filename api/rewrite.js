@@ -187,6 +187,24 @@ const SALES_STRUCTURE_PROMPT = `以下は「売れる鑑定導線」の骨組み
 - 「ナナ」など固有名詞や、資料内の特定エピソードを流用しない
 - 必ずユーザー指定のキャラ背景・占術・口調に置換する`
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isRetryableGeminiError(error) {
+  const msg = error instanceof Error ? error.message : String(error)
+  return (
+    msg.includes('[503') ||
+    msg.includes('503') ||
+    msg.includes('Service Unavailable') ||
+    msg.includes('[429') ||
+    msg.includes('429') ||
+    msg.includes('RESOURCE_EXHAUSTED') ||
+    msg.includes('rate') ||
+    msg.includes('需要が急増')
+  )
+}
+
 /** Single-line token safe for Authorization-style headers (no CR/LF or stray whitespace). */
 function toHttpSafeApiKeyToken(value) {
   return String(value ?? '')
@@ -462,10 +480,12 @@ ${characterPriorityInstruction}
 SNS向けハッシュタグ候補: ${profile?.hashtags || '#占い #運勢'}
 ${templateInstruction}`
 
-    const model = genAI.getGenerativeModel({
-      model: MODEL_NAME,
-      systemInstruction,
-    })
+    const modelCandidates = [
+      MODEL_NAME,
+      // 混雑時のフォールバック（モデルが使えない場合は自動で次へ）
+      'gemini-2.5-flash-lite',
+      'gemini-2.0-flash',
+    ]
 
     const prompt = `${mode === 'fortune' ? FORTUNE_OUTPUT_RULES : SNS_OUTPUT_RULES}
 
@@ -478,7 +498,32 @@ ${birthHintBlock}
 ${mode === 'fortune' ? '相談内容' : '元ネタ'}:
 ${sourceText}`
 
-    const result = await model.generateContent(prompt)
+    let result = null
+    let usedModel = ''
+    let lastError = null
+    for (const candidateModel of modelCandidates) {
+      usedModel = candidateModel
+      const model = genAI.getGenerativeModel({
+        model: candidateModel,
+        systemInstruction,
+      })
+      // 503/429は短いバックオフで数回リトライ
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          result = await model.generateContent(prompt)
+          lastError = null
+          break
+        } catch (err) {
+          lastError = err
+          if (!isRetryableGeminiError(err) || attempt === 2) break
+          await sleep(400 * Math.pow(2, attempt) + Math.floor(Math.random() * 250))
+        }
+      }
+      if (result) break
+    }
+    if (!result) {
+      throw lastError || new Error('Gemini generateContent failed')
+    }
     const raw = result.response.text().trim()
     const cleaned = raw.replace(/```json|```/g, '').trim()
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/)
@@ -492,12 +537,14 @@ ${sourceText}`
         .json({
           fortuneText: parsed.fortuneText ?? '',
           upsellText: parsed.upsellText ?? '',
+          debug: process?.env?.NODE_ENV === 'development' ? { usedModel } : undefined,
         })
     }
 
     return res.status(200).setHeader('Content-Type', 'application/json').json({
       xPost: parsed.xPost ?? '',
       threadsPost: parsed.threadsPost ?? '',
+      debug: process?.env?.NODE_ENV === 'development' ? { usedModel } : undefined,
     })
   } catch (error) {
     console.error('Gemini rewrite error:', error)
