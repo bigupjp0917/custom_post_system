@@ -25,6 +25,131 @@ function App() {
   const BIRTH_DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1))
   /** 既定のカスタムGPT（占い鑑定文メソッドGPTs） */
   const DEFAULT_CUSTOM_GPT_URL = 'https://chatgpt.com/g/g-oe1w8yED4'
+
+  function parseCsv(text) {
+    const rows = []
+    let row = []
+    let field = ''
+    let i = 0
+    let inQuotes = false
+    while (i < text.length) {
+      const ch = text[i]
+      if (inQuotes) {
+        if (ch === '"') {
+          const next = text[i + 1]
+          if (next === '"') {
+            field += '"'
+            i += 2
+            continue
+          }
+          inQuotes = false
+          i += 1
+          continue
+        }
+        field += ch
+        i += 1
+        continue
+      }
+
+      if (ch === '"') {
+        inQuotes = true
+        i += 1
+        continue
+      }
+      if (ch === ',') {
+        row.push(field)
+        field = ''
+        i += 1
+        continue
+      }
+      if (ch === '\n') {
+        row.push(field)
+        rows.push(row)
+        row = []
+        field = ''
+        i += 1
+        continue
+      }
+      if (ch === '\r') {
+        i += 1
+        continue
+      }
+      field += ch
+      i += 1
+    }
+    row.push(field)
+    rows.push(row)
+    return rows.filter((r) => r.some((c) => String(c || '').trim() !== ''))
+  }
+
+  function buildCompetitorInsightsFromCsv(rows, maxRows = 500) {
+    if (!rows || rows.length < 2) return { summary: '' }
+    const header = rows[0]
+    const idxText = header.findIndex((h) => String(h).includes('投稿テキスト'))
+    const idxLikes = header.findIndex((h) => String(h).includes('いいね'))
+    const idxRt = header.findIndex((h) => String(h).includes('RT'))
+    const idxImps = header.findIndex((h) => String(h).includes('インプ'))
+    const usable = rows.slice(1, 1 + maxRows)
+
+    const firstLineCounts = new Map()
+    const keywordCounts = new Map()
+    const bracketTitleCounts = new Map()
+    let totalChars = 0
+    let samples = 0
+
+    const addCount = (map, key) => {
+      const k = String(key || '').trim()
+      if (!k) return
+      map.set(k, (map.get(k) || 0) + 1)
+    }
+
+    for (const r of usable) {
+      const rawText = idxText >= 0 ? String(r[idxText] || '') : ''
+      const t = rawText.trim()
+      if (!t) continue
+      samples += 1
+      totalChars += [...t].length
+
+      const firstLine = t.split('\n').map((s) => s.trim()).filter(Boolean)[0] || ''
+      if (firstLine) addCount(firstLineCounts, firstLine)
+
+      // 【タイトル】系の抽出
+      const m = firstLine.match(/【([^】]{1,40})】/)
+      if (m?.[1]) addCount(bracketTitleCounts, m[1])
+
+      // 雑なキーワード抽出（頻出語の方向性だけ掴む）
+      const tokens = t
+        .replace(/[0-9０-９]/g, ' ')
+        .replace(/[【】「」『』（）()、。.,:：!！?？\s]/g, ' ')
+        .split(' ')
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 2 && s.length <= 8)
+      for (const tok of tokens.slice(0, 200)) addCount(keywordCounts, tok)
+    }
+
+    const topN = (map, n) =>
+      Array.from(map.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, n)
+        .map(([k, v]) => ({ k, v }))
+
+    const avgChars = samples ? Math.round(totalChars / samples) : 0
+
+    const topHooks = topN(firstLineCounts, 8).map((x) => `- ${x.k}（${x.v}）`).join('\n')
+    const topBracketThemes = topN(bracketTitleCounts, 8)
+      .map((x) => `- ${x.k}（${x.v}）`)
+      .join('\n')
+    const topKeywords = topN(keywordCounts, 15).map((x) => x.k).join('、')
+
+    const metricsHint =
+      idxLikes >= 0 || idxRt >= 0 || idxImps >= 0
+        ? '※元CSVにはいいね/RT/インプの列があります。可能なら「上位投稿だけ」に絞って分析するとさらに精度が上がります。'
+        : ''
+
+    const summary = `【競合投稿CSVインサイト（要約）】\n- サンプル件数: ${samples}\n- 平均文字数: 約${avgChars}字\n\n【よく使われる冒頭フック（1行目）】\n${topHooks || '-（抽出できませんでした）'}\n\n【よく使われる【】タイトルのテーマ】\n${topBracketThemes || '-（抽出できませんでした）'}\n\n【頻出キーワード（傾向）】\n${topKeywords || '（抽出できませんでした）'}\n\n【このインサイトの使い方】\n- 上の“フック/テーマ/語彙”を参考に、同等の強さのフックで書く（コピペは禁止）\n- 改行は短め、ランキング/断言/期限/血液型/星座などの「分かりやすい型」を混ぜる\n- 読者の不安煽りは最小限、希望の方向へ誘導\n\n${metricsHint}`.trim()
+
+    return { summary }
+  }
   const normalizeProfile = (profile, index = 0) => ({
     id: profile?.id || crypto.randomUUID(),
     appraiserName: profile?.appraiserName || profile?.name || `占い師 ${index + 1}`,
@@ -82,6 +207,9 @@ function App() {
   const [mode, setMode] = useState('sns')
   const [isProfilePickerOpen, setIsProfilePickerOpen] = useState(false)
   const [inputText, setInputText] = useState('')
+  const [competitorInsights, setCompetitorInsights] = useState('')
+  const [applyCompetitorInsights, setApplyCompetitorInsights] = useState(true)
+  const [competitorCsvName, setCompetitorCsvName] = useState('')
   const [productRank, setProductRank] = useState('free')
   const [fortuneMethod, setFortuneMethod] = useState(() => {
     try {
@@ -150,6 +278,9 @@ function App() {
       if (typeof draft?.activeTab === 'string') setActiveTab(draft.activeTab)
       if (typeof draft?.mode === 'string') setMode(draft.mode)
       if (typeof draft?.inputText === 'string') setInputText(draft.inputText)
+      if (typeof draft?.competitorInsights === 'string') setCompetitorInsights(draft.competitorInsights)
+      if (typeof draft?.applyCompetitorInsights === 'boolean') setApplyCompetitorInsights(draft.applyCompetitorInsights)
+      if (typeof draft?.competitorCsvName === 'string') setCompetitorCsvName(draft.competitorCsvName)
       if (typeof draft?.productRank === 'string') setProductRank(draft.productRank)
       if (
         typeof draft?.fortuneMethod === 'string' &&
@@ -197,6 +328,9 @@ function App() {
           activeTab,
           mode,
           inputText,
+          competitorInsights,
+          applyCompetitorInsights,
+          competitorCsvName,
           productRank,
           fortuneMethod,
           personNames,
@@ -218,6 +352,9 @@ function App() {
     activeTab,
     mode,
     inputText,
+    competitorInsights,
+    applyCompetitorInsights,
+    competitorCsvName,
     productRank,
     fortuneMethod,
     personNames,
@@ -459,6 +596,9 @@ function App() {
       activeTab,
       mode,
       inputText,
+      competitorInsights,
+      applyCompetitorInsights,
+      competitorCsvName,
       productRank,
       fortuneMethod,
       personNames,
@@ -492,6 +632,9 @@ function App() {
       if (typeof draft?.activeTab === 'string') setActiveTab(draft.activeTab)
       if (typeof draft?.mode === 'string') setMode(draft.mode)
       if (typeof draft?.inputText === 'string') setInputText(draft.inputText)
+      if (typeof draft?.competitorInsights === 'string') setCompetitorInsights(draft.competitorInsights)
+      if (typeof draft?.applyCompetitorInsights === 'boolean') setApplyCompetitorInsights(draft.applyCompetitorInsights)
+      if (typeof draft?.competitorCsvName === 'string') setCompetitorCsvName(draft.competitorCsvName)
       if (typeof draft?.productRank === 'string') setProductRank(draft.productRank)
       if (
         typeof draft?.fortuneMethod === 'string' &&
@@ -644,7 +787,14 @@ function App() {
                   partner: birthPartner,
                 },
               }
-            : {}),
+            : {
+                competitor: applyCompetitorInsights
+                  ? {
+                      csvName: competitorCsvName || '',
+                      insights: competitorInsights || '',
+                    }
+                  : null,
+              }),
         }),
       })
 
@@ -1129,6 +1279,60 @@ function App() {
                   ? '元ネタを投稿向けに変換します。'
                   : '相談内容から、心に響く長文鑑定を生成します。'}
               </p>
+              {mode === 'sns' && (
+                <div className="mt-4 rounded-2xl border border-[#8d7a3f]/35 bg-[#0b1839] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold tracking-wide text-[#f8d77c]">
+                      競合分析CSV（任意）
+                    </p>
+                    <label className="cursor-pointer rounded-lg border border-[#8d7a3f]/60 bg-[#121f4f] px-3 py-2 text-xs text-[#f8d77c]">
+                      CSVを読み込む
+                      <input
+                        type="file"
+                        accept=".csv,text/csv"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          try {
+                            const text = await file.text()
+                            const rows = parseCsv(text)
+                            const { summary } = buildCompetitorInsightsFromCsv(rows, 600)
+                            setCompetitorCsvName(file.name)
+                            setCompetitorInsights(summary)
+                          } catch (err) {
+                            console.error(err)
+                            setCompetitorCsvName(file.name)
+                            setCompetitorInsights('')
+                            setErrorMessage('CSVの読み込みに失敗しました。形式を確認してください。')
+                          }
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <label className="flex items-center gap-2 text-xs text-[#d9caa0]">
+                      <input
+                        type="checkbox"
+                        checked={applyCompetitorInsights}
+                        onChange={(e) => setApplyCompetitorInsights(e.target.checked)}
+                      />
+                      このインサイトをSNSリライトに反映する
+                    </label>
+                    {competitorCsvName && (
+                      <span className="text-xs text-[#cbb886]">読み込み: {competitorCsvName}</span>
+                    )}
+                  </div>
+                  <textarea
+                    value={competitorInsights}
+                    onChange={(e) => setCompetitorInsights(e.target.value)}
+                    rows={7}
+                    placeholder="CSVを読み込むと、ここに競合インサイト要約が入ります（編集可）。"
+                    className="mt-3 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0c183a] p-3 text-xs outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                  />
+                </div>
+              )}
               <textarea
                 value={inputText}
                 onChange={(event) => setInputText(event.target.value)}

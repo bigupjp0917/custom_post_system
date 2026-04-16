@@ -319,6 +319,7 @@ export default async function handler(req, res) {
     fortuneMethod: rawFortuneMethod,
     personNames,
     birth,
+    competitor,
   } = req.body ?? {}
 
   const fortuneMethod =
@@ -361,6 +362,13 @@ export default async function handler(req, res) {
               )}）`
             : '- お相手: 未入力'
         }\n- 生年月日は、入力されている場合のみ参照してよい。未入力の場合は推測や捏造をしない。`
+      : ''
+
+  const competitorInsightsBlock =
+    mode === 'sns' && competitor && typeof competitor === 'object'
+      ? `\n【競合分析メモ（CSV要約 / 任意）】\n${
+          typeof competitor.insights === 'string' ? competitor.insights.slice(0, 6000) : ''
+        }\n\n指示:\n- 上記の“傾向”を参考に、より刺さるフック/構成/語彙を選ぶ（コピペ禁止）\n- 元ネタの意味は変えず、読まれる形に整える\n- 炎上リスクがある不安煽りは避ける`
       : ''
   if (!sourceText || typeof sourceText !== 'string') {
     return res.status(400).json({
@@ -494,6 +502,7 @@ ${mode === 'fortune' ? upsellInstruction[productRank] || upsellInstruction.free 
 ${mode === 'fortune' ? `\n【ユーザーが選択した占術】${FORTUNE_METHOD_LABELS[fortuneMethod] || FORTUNE_METHOD_LABELS.tarot_major}\n${getFortuneMethodInstruction(fortuneMethod)}` : ''}
 ${personNameBlock}
 ${birthHintBlock}
+${competitorInsightsBlock}
 
 ${mode === 'fortune' ? '相談内容' : '元ネタ'}:
 ${sourceText}`
