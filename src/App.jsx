@@ -489,6 +489,20 @@ function App() {
       ) {
         setFortuneMethod(draft.fortuneMethod)
       }
+      if (draft?.birthSelf && typeof draft.birthSelf === 'object') {
+        setBirthSelf({
+          year: typeof draft.birthSelf.year === 'string' ? draft.birthSelf.year : '',
+          month: typeof draft.birthSelf.month === 'string' ? draft.birthSelf.month : '',
+          day: typeof draft.birthSelf.day === 'string' ? draft.birthSelf.day : '',
+        })
+      }
+      if (draft?.birthPartner && typeof draft.birthPartner === 'object') {
+        setBirthPartner({
+          year: typeof draft.birthPartner.year === 'string' ? draft.birthPartner.year : '',
+          month: typeof draft.birthPartner.month === 'string' ? draft.birthPartner.month : '',
+          day: typeof draft.birthPartner.day === 'string' ? draft.birthPartner.day : '',
+        })
+      }
       if (typeof draft?.xPost === 'string') setXPost(draft.xPost)
       if (typeof draft?.threadsPost === 'string') setThreadsPost(draft.threadsPost)
       if (typeof draft?.fortuneText === 'string') setFortuneText(draft.fortuneText)
