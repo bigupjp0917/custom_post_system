@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const MODEL_NAME = 'gemini-1.5-flash'
+// gemini-1.5-* は Gemini Developer API (v1beta) で 404 になるため 2.5 を使用
+const MODEL_NAME = 'gemini-2.5-flash'
 
 /** @type {Record<string, string>} */
 const FORTUNE_METHOD_LABELS = {
