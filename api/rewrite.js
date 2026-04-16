@@ -26,6 +26,11 @@ function normalizeBirthDate(input) {
   return { year, month, day }
 }
 
+function normalizePersonName(value) {
+  if (typeof value !== 'string') return ''
+  return value.trim().slice(0, 80)
+}
+
 function getWesternSunSign(month, day) {
   // Western tropical zodiac (Sun sign)
   const md = month * 100 + day
@@ -294,6 +299,7 @@ export default async function handler(req, res) {
     profile,
     productRank = 'free',
     fortuneMethod: rawFortuneMethod,
+    personNames,
     birth,
   } = req.body ?? {}
 
@@ -306,6 +312,12 @@ export default async function handler(req, res) {
 
   const birthSelf = normalizeBirthDate(birth?.self)
   const birthPartner = normalizeBirthDate(birth?.partner)
+  const selfName = normalizePersonName(personNames?.self)
+  const partnerName = normalizePersonName(personNames?.partner)
+  const personNameBlock =
+    mode === 'fortune'
+      ? `\n【人物名（任意入力）】\n- 本人名: ${selfName || '未入力'}\n- お相手名: ${partnerName || '未入力'}\n- 入力がある場合は、鑑定文内の呼称に自然に反映する。未入力なら「あなた様」「お相手様」を使う。`
+      : ''
   const birthHintBlock =
     mode === 'fortune' && (birthSelf || birthPartner)
       ? `\n【生年月日（任意入力）】\n${
@@ -459,6 +471,7 @@ ${templateInstruction}`
 ${mode === 'fortune' ? fortuneRankInstruction[productRank] || fortuneRankInstruction.free : ''}
 ${mode === 'fortune' ? upsellInstruction[productRank] || upsellInstruction.free : ''}
 ${mode === 'fortune' ? `\n【ユーザーが選択した占術】${FORTUNE_METHOD_LABELS[fortuneMethod] || FORTUNE_METHOD_LABELS.tarot_major}\n${getFortuneMethodInstruction(fortuneMethod)}` : ''}
+${personNameBlock}
 ${birthHintBlock}
 
 ${mode === 'fortune' ? '相談内容' : '元ネタ'}:

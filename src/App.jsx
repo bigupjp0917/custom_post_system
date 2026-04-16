@@ -94,6 +94,7 @@ function App() {
     }
     return 'tarot_major'
   })
+  const [personNames, setPersonNames] = useState({ self: '', partner: '' })
   const [birthSelf, setBirthSelf] = useState({ year: '', month: '', day: '' })
   const [birthPartner, setBirthPartner] = useState({ year: '', month: '', day: '' })
   const [xPost, setXPost] = useState('')
@@ -156,6 +157,12 @@ function App() {
       ) {
         setFortuneMethod(draft.fortuneMethod)
       }
+      if (draft?.personNames && typeof draft.personNames === 'object') {
+        setPersonNames({
+          self: typeof draft.personNames.self === 'string' ? draft.personNames.self : '',
+          partner: typeof draft.personNames.partner === 'string' ? draft.personNames.partner : '',
+        })
+      }
       if (draft?.birthSelf && typeof draft.birthSelf === 'object') {
         setBirthSelf({
           year: typeof draft.birthSelf.year === 'string' ? draft.birthSelf.year : '',
@@ -192,6 +199,7 @@ function App() {
           inputText,
           productRank,
           fortuneMethod,
+          personNames,
           birthSelf,
           birthPartner,
           xPost,
@@ -212,6 +220,7 @@ function App() {
     inputText,
     productRank,
     fortuneMethod,
+    personNames,
     birthSelf,
     birthPartner,
     xPost,
@@ -452,6 +461,7 @@ function App() {
       inputText,
       productRank,
       fortuneMethod,
+      personNames,
       birthSelf,
       birthPartner,
       xPost,
@@ -488,6 +498,12 @@ function App() {
         FORTUNE_METHOD_OPTIONS.some((m) => m.key === draft.fortuneMethod)
       ) {
         setFortuneMethod(draft.fortuneMethod)
+      }
+      if (draft?.personNames && typeof draft.personNames === 'object') {
+        setPersonNames({
+          self: typeof draft.personNames.self === 'string' ? draft.personNames.self : '',
+          partner: typeof draft.personNames.partner === 'string' ? draft.personNames.partner : '',
+        })
       }
       if (draft?.birthSelf && typeof draft.birthSelf === 'object') {
         setBirthSelf({
@@ -622,6 +638,7 @@ function App() {
           ...(mode === 'fortune'
             ? {
                 fortuneMethod,
+                personNames,
                 birth: {
                   self: birthSelf,
                   partner: birthPartner,
@@ -998,6 +1015,14 @@ function App() {
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-xl border border-[#8d7a3f]/35 bg-[#0b1839] p-3">
                       <p className="text-xs font-semibold text-[#f8d77c]">本人</p>
+                      <input
+                        value={personNames.self}
+                        onChange={(e) =>
+                          setPersonNames((v) => ({ ...v, self: e.target.value }))
+                        }
+                        placeholder="本人名（任意）"
+                        className="mt-2 w-full rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                      />
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         <select
                           value={birthSelf.year}
@@ -1043,6 +1068,14 @@ function App() {
                     </div>
                     <div className="rounded-xl border border-[#8d7a3f]/35 bg-[#0b1839] p-3">
                       <p className="text-xs font-semibold text-[#f8d77c]">お相手</p>
+                      <input
+                        value={personNames.partner}
+                        onChange={(e) =>
+                          setPersonNames((v) => ({ ...v, partner: e.target.value }))
+                        }
+                        placeholder="お相手名（任意）"
+                        className="mt-2 w-full rounded-lg border border-[#8d7a3f]/40 bg-[#0c183a] px-2 py-2 text-xs outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                      />
                       <div className="mt-2 grid grid-cols-3 gap-2">
                         <select
                           value={birthPartner.year}
