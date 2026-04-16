@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const MODEL_NAME = 'gemini-2.0-flash'
+const MODEL_NAME = 'gemini-1.5-flash'
 
 /** @type {Record<string, string>} */
 const FORTUNE_METHOD_LABELS = {
