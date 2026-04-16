@@ -1260,7 +1260,7 @@ function App() {
                   <h3 className="font-semibold text-[#f8d77c]">ChatGPT（カスタムGPT）</h3>
                   <p className="mt-2 text-xs leading-relaxed text-[#d9caa0]">
                     このページ内には埋め込めないため、下のボタンで GPT を別タブで開いてください。
-                    <strong className="text-[#f4e2b1]"> GPT の返答は「鑑定結果」内の取り込み欄に貼り付け</strong>
+                    <strong className="text-[#f4e2b1]"> GPT の返答はこの欄の下に貼り付け</strong>
                     ます（コールドリーディングなどは GPT 側で行う想定です）。
                   </p>
                   {effectiveCustomGptUrl ? (
@@ -1288,6 +1288,38 @@ function App() {
                       を指定してください。
                     </p>
                   )}
+                  <div className="mt-6 rounded-xl border border-[#5a6a9a]/50 bg-[#0c1530] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-semibold tracking-wide text-[#a8b8e8]">
+                        ChatGPTの出力（鑑定結果への取り込み）
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleGptOutputCopy}
+                          disabled={!gptPastedOutput.trim()}
+                          className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {gptOutputCopyButtonDone ? 'コピー完了' : 'GPTだけコピー'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCombinedFortuneCopy}
+                          disabled={!fortuneText.trim() && !gptPastedOutput.trim()}
+                          className="min-w-[4.5rem] rounded-lg border border-[#d9b862]/60 bg-[#1a2448] px-3 py-1 text-xs text-[#f8d77c] transition-colors disabled:cursor-not-allowed disabled:opacity-45"
+                        >
+                          {combinedCopyButtonDone ? 'コピー完了' : '鑑定＋GPTをまとめてコピー'}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea
+                      value={gptPastedOutput}
+                      onChange={(event) => setGptPastedOutput(event.target.value)}
+                      rows={8}
+                      placeholder="ChatGPT の返答をここに貼り付け・編集します。"
+                      className="mt-3 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0b1839] p-3 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
+                    />
+                  </div>
                 </section>
                 <section className="rounded-2xl border border-[#8d7a3f]/35 bg-[#0f1d46]/70 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1323,38 +1355,6 @@ function App() {
                       </pre>
                     </div>
                   )}
-                  <div className="mt-6 rounded-xl border border-[#5a6a9a]/50 bg-[#0c1530] p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-xs font-semibold tracking-wide text-[#a8b8e8]">
-                        ChatGPTの出力（鑑定結果への取り込み）
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={handleGptOutputCopy}
-                          disabled={!gptPastedOutput.trim()}
-                          className="min-w-[4.5rem] rounded-lg border border-[#8d7a3f]/60 px-3 py-1 text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          {gptOutputCopyButtonDone ? 'コピー完了' : 'GPTだけコピー'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCombinedFortuneCopy}
-                          disabled={!fortuneText.trim() && !gptPastedOutput.trim()}
-                          className="min-w-[4.5rem] rounded-lg border border-[#d9b862]/60 bg-[#1a2448] px-3 py-1 text-xs text-[#f8d77c] transition-colors disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                          {combinedCopyButtonDone ? 'コピー完了' : '鑑定＋GPTをまとめてコピー'}
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      value={gptPastedOutput}
-                      onChange={(event) => setGptPastedOutput(event.target.value)}
-                      rows={8}
-                      placeholder="ChatGPT の返答をここに貼り付け・編集します。"
-                      className="mt-3 w-full rounded-xl border border-[#8d7a3f]/40 bg-[#0b1839] p-3 text-sm outline-none placeholder:text-[#7a6e4a] focus:border-[#f8d77c]"
-                    />
-                  </div>
                 </section>
               </>
             )}
